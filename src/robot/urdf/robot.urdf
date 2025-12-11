@@ -1,83 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <robot name="robot">
-  <!-- ros2_control硬件接口配置 -->
-  <ros2_control name="GazeboSystem" type="system">
-    <hardware>
-      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
-    </hardware>
-
-    <joint name="wheel_0_Joint">
-      <command_interface name="effort">
-        <param name="min">-100.0</param>
-        <param name="max">100.0</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>
-
-    <joint name="wheel_1_Joint">
-      <command_interface name="effort">
-        <param name="min">-100.0</param>
-        <param name="max">100.0</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>
-
-    <joint name="wheel_2_Joint">
-      <command_interface name="effort">
-        <param name="min">-100.0</param>
-        <param name="max">100.0</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>
-
-    <joint name="wheel_3_Joint">
-      <command_interface name="effort">
-        <param name="min">-100.0</param>
-        <param name="max">100.0</param>
-      </command_interface>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-      <state_interface name="effort"/>
-    </joint>
-
-    <joint name="mouth_Joint">
-      <command_interface name="effort">
-        <param name="min">-150.0</param>
-        <param name="max">150.0</param>
-      </command_interface>
-    </joint>
-
-    <joint name="dribble_Joint">
-      <command_interface name="effort">
-        <param name="min">-50.0</param>
-        <param name="max">50.0</param>
-      </command_interface>
-    </joint>
-  </ros2_control>
-
-  <!-- Gazebo仿真配置模块 -->
-  <gazebo>
-    <plugin name="gz_ros2_control::GazeboSimROS2ControlPlugin" filename="gz_ros2_control-system">
-      <robot_param>robot_description</robot_param>
-      <robot_param_node>robot_state_publisher</robot_param_node>
-      <parameters>/home/yixi/ROS/zjunlict/src/robot/config/controller_manager.yaml</parameters>
-    </plugin>
-    <robotNamespace>/</robotNamespace>
-    
-    <!-- 全局碰撞禁用：仅保留车轮碰撞 -->
-    <disable_collisions link1="base_Link" link2="*" />
-    <disable_collisions link1="mouth_Link" link2="*" />
-    <disable_collisions link1="dribble_Link" link2="*" />
-  </gazebo>
-
-  <!-- 基础车身链接（完全无碰撞） -->
+  <!-- ==================================================================== -->
+  <!-- 1. 基础车身链接：保留无摩擦支撑球（可选，防止车轮碰撞失效时下陷）    -->
+  <!-- ==================================================================== -->
   <link name="base_Link">
     <!-- 惯性参数完全保留原值 -->
     <inertial>
@@ -98,15 +23,26 @@
       </material>
     </visual>
 
-    <!-- 车身完全无碰撞配置 -->
+    <!-- 支撑球：可选保留（若车轮碰撞完全生效，可删除此碰撞体） -->
+    <collision>
+      <origin xyz="0 0 -0.0015" rpy="0 0 0" /> 
+      <geometry>
+        <sphere radius="0.005" />
+      </geometry>
+    </collision>
+
+    <!-- 支撑球无摩擦配置 -->
     <gazebo reference="base_Link">
       <material>Gazebo/Red</material>
-      <collision_bitmask>0x0000</collision_bitmask>
-      <max_contacts>0</max_contacts>
+      <mu1>0.0</mu1>
+      <mu2>0.0</mu2>
     </gazebo>
   </link>
 
-  <!-- 车轮0链接（仅修改摩擦参数，其余完全保留） -->
+  <!-- ==================================================================== -->
+  <!-- 2. 车轮链接：恢复碰撞体 + 摩擦设为0（仅保留碰撞检测）               -->
+  <!-- ==================================================================== -->
+  <!-- 车轮0链接 -->
   <link name="wheel_0_Link">
     <!-- 惯性参数完全保留原值 -->
     <inertial>
@@ -127,7 +63,7 @@
       </material>
     </visual>
 
-    <!-- 碰撞体完全保留原值（仅车轮有碰撞） -->
+    <!-- 恢复车轮碰撞体（核心修改1） -->
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
@@ -135,33 +71,26 @@
       </geometry>
     </collision>
 
-    <!-- Gazebo物理参数：仅添加/修改滚动/旋转摩擦，其余保留原值 -->
+    <!-- 核心修改2：移除碰撞掩码 + 摩擦设为0（仅保留碰撞，无摩擦） -->
     <gazebo>
-      <mu1>1.5</mu1>
-      <mu2>0.001</mu2>
-      <fdir1>1 0 0</fdir1>
-      <kp>1000000.0</kp> <!-- 刚度：1e6，保证轮子不陷地 -->
-      <kd>10.0</kd>      <!-- 阻尼：防止接触震荡 -->
-      <min_depth>0.001</min_depth>
-      <max_contacts>1</max_contacts>
-      <rolling_friction>0</rolling_friction>    <!-- 新增：滚动摩擦 -->
-      <rotational_friction>0</rotational_friction>  <!-- 新增：旋转摩擦 -->
+      <mu1>0.0</mu1>  <!-- 法向摩擦为0 -->
+      <mu2>0.0</mu2>  <!-- 切向摩擦为0 -->
     </gazebo>
     <gazebo reference="wheel_0_Link">
       <material>Gazebo/Black</material>
     </gazebo>
   </link>
 
-  <!-- 车轮0关节（优化角度精度+修改关节阻尼/摩擦） -->
+  <!-- 车轮0关节（保留原有配置，维持TF树） -->
   <joint name="wheel_0_Joint" type="continuous">
     <origin xyz="0.041864 0.066996 0.0225" rpy="0 0 -0.55851" />
     <parent link="base_Link" />
     <child link="wheel_0_Link" />
     <axis xyz="0 1 0" />
-    <dynamics damping="0.01" friction="0" />  <!-- 修改：关节阻尼+摩擦 -->
+    <dynamics damping="0.01" friction="0" />
   </joint>
 
-  <!-- 车轮1链接（与车轮0参数完全一致） -->
+  <!-- 车轮1链接 -->
   <link name="wheel_1_Link">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -178,29 +107,26 @@
         <color rgba="1 1 0 1" />
       </material>
     </visual>
+
+    <!-- 恢复车轮碰撞体 -->
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <sphere radius="0.029" />
       </geometry>
     </collision>
+
+    <!-- 摩擦设为0（仅碰撞） -->
     <gazebo>
-      <mu1>1.5</mu1>
-      <mu2>0.001</mu2>
-      <fdir1>1 0 0</fdir1>
-      <kp>1000000.0</kp> <!-- 刚度：1e6，保证轮子不陷地 -->
-      <kd>10.0</kd>      <!-- 阻尼：防止接触震荡 -->
-      <min_depth>0.001</min_depth>
-      <max_contacts>1</max_contacts>
-      <rolling_friction>0</rolling_friction>    <!-- 新增：滚动摩擦 -->
-      <rotational_friction>0</rotational_friction>  <!-- 新增：旋转摩擦 -->
+      <mu1>0.0</mu1>
+      <mu2>0.0</mu2>
     </gazebo>
     <gazebo reference="wheel_1_Link">
       <material>Gazebo/Black</material>
     </gazebo>
   </link>
 
-  <!-- 车轮1关节（优化角度精度+修改关节阻尼/摩擦） -->
+  <!-- 车轮1关节 -->
   <joint name="wheel_1_Joint" type="continuous">
     <origin xyz="0.041864 -0.066996 0.0225" rpy="0 0 -2.5831" />
     <parent link="base_Link" />
@@ -209,7 +135,7 @@
     <dynamics damping="0.01" friction="0" />
   </joint>
 
-  <!-- 车轮2链接（与车轮0参数完全一致） -->
+  <!-- 车轮2链接 -->
   <link name="wheel_2_Link">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -226,29 +152,26 @@
         <color rgba="1 1 0 1" />
       </material>
     </visual>
+
+    <!-- 恢复车轮碰撞体 -->
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <sphere radius="0.029" />
       </geometry>
     </collision>
+
+    <!-- 摩擦设为0（仅碰撞） -->
     <gazebo>
-      <mu1>1.5</mu1>
-      <mu2>0.001</mu2>
-      <fdir1>1 0 0</fdir1>
-      <kp>1000000.0</kp> <!-- 刚度：1e6，保证轮子不陷地 -->
-      <kd>10.0</kd>      <!-- 阻尼：防止接触震荡 -->
-      <min_depth>0.001</min_depth>
-      <max_contacts>1</max_contacts>
-      <rolling_friction>0</rolling_friction>    <!-- 新增：滚动摩擦 -->
-      <rotational_friction>0</rotational_friction>  <!-- 新增：旋转摩擦 -->
+      <mu1>0.0</mu1>
+      <mu2>0.0</mu2>
     </gazebo>
     <gazebo reference="wheel_2_Link">
       <material>Gazebo/Black</material>
     </gazebo>
   </link>
 
-  <!-- 车轮2关节（优化角度精度+修改关节阻尼/摩擦） -->
+  <!-- 车轮2关节 -->
   <joint name="wheel_2_Joint" type="continuous">
     <origin xyz="-0.055861 -0.055861 0.0225" rpy="0 0 2.3562" />
     <parent link="base_Link" />
@@ -257,7 +180,7 @@
     <dynamics damping="0.01" friction="0" />
   </joint>
 
-  <!-- 车轮3链接（与车轮0参数完全一致） -->
+  <!-- 车轮3链接 -->
   <link name="wheel_3_Link">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -274,29 +197,26 @@
         <color rgba="1 1 0 1" />
       </material>
     </visual>
+
+    <!-- 恢复车轮碰撞体 -->
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
         <sphere radius="0.029" />
       </geometry>
     </collision>
+
+    <!-- 摩擦设为0（仅碰撞） -->
     <gazebo>
-      <mu1>1.5</mu1>
-      <mu2>0.001</mu2>
-      <fdir1>1 0 0</fdir1>
-      <kp>1000000.0</kp> <!-- 刚度：1e6，保证轮子不陷地 -->
-      <kd>10.0</kd>      <!-- 阻尼：防止接触震荡 -->
-      <min_depth>0.001</min_depth>
-      <max_contacts>1</max_contacts>
-      <rolling_friction>0</rolling_friction>    <!-- 新增：滚动摩擦 -->
-      <rotational_friction>0</rotational_friction>  <!-- 新增：旋转摩擦 -->
+      <mu1>0.0</mu1>
+      <mu2>0.0</mu2>
     </gazebo>
     <gazebo reference="wheel_3_Link">
       <material>Gazebo/Black</material>
     </gazebo>
   </link>
 
-  <!-- 车轮3关节（优化角度精度+修改关节阻尼/摩擦） -->
+  <!-- 车轮3关节 -->
   <joint name="wheel_3_Joint" type="continuous">
     <origin xyz="-0.055861 0.055861 0.0225" rpy="0 0 0.7854" />
     <parent link="base_Link" />
@@ -305,7 +225,9 @@
     <dynamics damping="0.01" friction="0" />
   </joint>
 
-  <!-- 机械臂/嘴巴链接（完全无碰撞） -->
+  <!-- ==================================================================== -->
+  <!-- 保留原有机械臂/嘴巴、运球机构配置（无碰撞）                         -->
+  <!-- ==================================================================== -->
   <link name="mouth_Link">
     <inertial>
       <origin xyz="0.0061665 -0.041178 0.033013" rpy="0 0 0" />
@@ -330,7 +252,6 @@
     </gazebo>
   </link>
 
-  <!-- 机械臂关节（完全保留原值） -->
   <joint name="mouth_Joint" type="revolute">
     <origin xyz="0.0519 0.04365 0.0113" rpy="0 0 0" />
     <parent link="base_Link" />
@@ -339,7 +260,6 @@
     <limit lower="0" upper="0.16" effort="150" velocity="0.8" />
   </joint>
 
-  <!-- 运球机构链接（完全无碰撞） -->
   <link name="dribble_Link">
     <inertial>
       <origin xyz="2.2549E-05 0.0019168 0.00014443" rpy="0 0 0" />
@@ -364,7 +284,6 @@
     </gazebo>
   </link>
 
-  <!-- 运球机构关节（完全保留原值） -->
   <joint name="dribble_Joint" type="continuous">
     <origin xyz="0.015669 -0.0459 0.027271" rpy="0 -0.18761 0" />
     <parent link="mouth_Link" />
@@ -372,5 +291,54 @@
     <axis xyz="0 -1 0" />
   </joint>
 
-</robot>
+  <!-- ==================================================================== -->
+  <!-- 3. 传感器和核心控制插件（适配 Gazebo Fortress）                     -->
+  <!-- ==================================================================== -->
+  <!-- IMU传感器配置（完善噪声参数，Fortress必需） -->
+  <gazebo reference="base_Link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>1</always_on>
+      <update_rate>100</update_rate>
+      <visualize>true</visualize>
+      <topic>imu_internal</topic> <!-- Gazebo内部话题名 -->
+      <pose>0 0 0 0 0 0</pose>
+      <imu>
+        <enable_orientation>true</enable_orientation>
+      </imu>
+    </sensor>
+  </gazebo>
 
+  <!-- Gazebo核心插件配置（替换PosePublisher为OdometryPublisher） -->
+  <gazebo>
+    <!-- 1. 速度控制插件（保留） -->
+    <plugin
+      filename="libignition-gazebo-velocity-control-system.so"
+      name="ignition::gazebo::systems::VelocityControl">
+      <link_name>base_Link</link_name>
+      <topic>cmd_vel_internal</topic>
+    </plugin>
+
+    <!-- 2. 替换为真值里程计插件（核心修改） -->
+    <plugin
+      filename="libignition-gazebo-odometry-publisher-system.so"
+      name="ignition::gazebo::systems::OdometryPublisher">
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <topic>odom_internal</topic>
+      <odom_frame>world</odom_frame>
+      <robot_base_frame>base_Link</robot_base_frame>
+      <xyz_offset>0 0 0</xyz_offset>
+      <rpy_offset>0 0 0</rpy_offset>
+      <gaussian_noise>0</gaussian_noise>
+    </plugin>
+
+    <!-- 3. IMU系统插件（保留） -->
+    <plugin
+      filename="libignition-gazebo-imu-system.so"
+      name="ignition::gazebo::systems::Imu">
+    </plugin>
+
+    <!-- 保留命名空间配置 -->
+    <robotNamespace>/</robotNamespace>
+  </gazebo>
+
+</robot>
